@@ -56,6 +56,41 @@ export const deleteOrchid = createAsyncThunk('orchids/deleteOrchid', async (id, 
   }
 });
 
+// ─── Toggle Like ──────────────────────────────────────────────────────────────
+// payload: { orchidId, userEmail }
+export const toggleLike = createAsyncThunk(
+  'orchids/toggleLike',
+  async ({ orchidId, userEmail }, { getState, rejectWithValue }) => {
+    const orchid = getState().orchids.items.find((o) => String(o.id) === String(orchidId));
+    if (!orchid) return rejectWithValue('Orchid not found');
+
+    const likedBy = Array.isArray(orchid.likedBy) ? orchid.likedBy : [];
+    const alreadyLiked = likedBy.includes(userEmail);
+
+    const updatedLikedBy = alreadyLiked
+      ? likedBy.filter((e) => e !== userEmail)      // unlike
+      : [...likedBy, userEmail];                    // like
+
+    const updatedOrchid = {
+      ...orchid,
+      likedBy: updatedLikedBy,
+      numberOfLike: updatedLikedBy.length,
+    };
+
+    try {
+      const response = await fetch(`${MOCK_API_URL}/${orchidId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(updatedOrchid),
+      });
+      if (!response.ok) throw new Error('API Error');
+      return await response.json();
+    } catch {
+      return rejectWithValue(updatedOrchid); // local fallback
+    }
+  }
+);
+
 // ─── Submit Feedback (Add or Edit) ───────────────────────────────────────────
 // feedbackEntry: { rating, comment, author, date }
 export const submitFeedback = createAsyncThunk(
@@ -110,14 +145,44 @@ export const deleteFeedback = createAsyncThunk(
   }
 );
 
+// ─── Admin Reply to Feedback ──────────────────────────────────────────────────
+// payload: { orchidId, authorEmail, replyText }
+export const adminReply = createAsyncThunk(
+  'orchids/adminReply',
+  async ({ orchidId, authorEmail, replyText }, { getState, rejectWithValue }) => {
+    const orchid = getState().orchids.items.find((o) => String(o.id) === String(orchidId));
+    if (!orchid) return rejectWithValue('Orchid not found');
+
+    const updatedFeedback = (orchid.feedback || []).map((f) =>
+      f.author === authorEmail
+        ? { ...f, adminReply: replyText.trim(), adminReplyDate: new Date().toISOString() }
+        : f
+    );
+    const updatedOrchid = { ...orchid, feedback: updatedFeedback };
+
+    try {
+      const response = await fetch(`${MOCK_API_URL}/${orchidId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(updatedOrchid),
+      });
+      if (!response.ok) throw new Error('API Error');
+      return await response.json();
+    } catch {
+      return rejectWithValue(updatedOrchid);
+    }
+  }
+);
+
 // ─── Slice ───────────────────────────────────────────────────────────────────
 const orchidsSlice = createSlice({
   name: 'orchids',
   initialState: {
     items: [],
     status: 'idle',
-    submitting: false,      // for add/update/delete orchid
-    feedbackSubmitting: false, // for submit/delete feedback
+    submitting: false,
+    feedbackSubmitting: false,
+    replySubmitting: false,
     error: null,
   },
   reducers: {},
@@ -196,6 +261,34 @@ const orchidsSlice = createSlice({
       })
       .addCase(deleteFeedback.rejected, (state, action) => {
         state.feedbackSubmitting = false;
+        if (action.payload && action.payload.id) {
+          const idx = state.items.findIndex((i) => i.id === action.payload.id);
+          if (idx !== -1) state.items[idx] = action.payload;
+        }
+      })
+
+      // ── Toggle Like ───────────────────────────────────────────────────────
+      .addCase(toggleLike.fulfilled, (state, action) => {
+        const idx = state.items.findIndex((i) => i.id === action.payload.id);
+        if (idx !== -1) state.items[idx] = action.payload;
+      })
+      .addCase(toggleLike.rejected, (state, action) => {
+        // Local fallback — still update UI
+        if (action.payload && action.payload.id) {
+          const idx = state.items.findIndex((i) => i.id === action.payload.id);
+          if (idx !== -1) state.items[idx] = action.payload;
+        }
+      })
+
+      // ── Admin Reply ───────────────────────────────────────────────────────
+      .addCase(adminReply.pending, (state) => { state.replySubmitting = true; })
+      .addCase(adminReply.fulfilled, (state, action) => {
+        state.replySubmitting = false;
+        const idx = state.items.findIndex((i) => i.id === action.payload.id);
+        if (idx !== -1) state.items[idx] = action.payload;
+      })
+      .addCase(adminReply.rejected, (state, action) => {
+        state.replySubmitting = false;
         if (action.payload && action.payload.id) {
           const idx = state.items.findIndex((i) => i.id === action.payload.id);
           if (idx !== -1) state.items[idx] = action.payload;

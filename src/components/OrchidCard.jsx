@@ -1,17 +1,37 @@
 import React from 'react';
 import {
   Card, CardMedia, CardContent, Typography, CardActions,
-  Button, Chip, Box, Rating, useTheme
+  Button, Chip, Box, Rating, useTheme, IconButton, Tooltip,
 } from '@mui/material';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import FavoriteIcon from '@mui/icons-material/Favorite';
+import FavoriteBorderIcon from '@mui/icons-material/FavoriteBorder';
 import VisibilityIcon from '@mui/icons-material/Visibility';
 import InfoIcon from '@mui/icons-material/Info';
 import { motion } from 'framer-motion';
+import { useSelector, useDispatch } from 'react-redux';
+import { toggleLike } from '../features/orchidsSlice';
 
 export default function OrchidCard({ orchid, onQuickView }) {
   const theme = useTheme();
   const isDark = theme.palette.mode === 'dark';
+  const dispatch = useDispatch();
+  const navigate = useNavigate();
+  const { user } = useSelector((state) => state.auth);
+
+  const likedBy  = Array.isArray(orchid.likedBy) ? orchid.likedBy : [];
+  const isLiked  = user ? likedBy.includes(user.email) : false;
+  const likeCount = orchid.numberOfLike ?? likedBy.length;
+
+  const handleLike = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (!user) {
+      navigate('/login');
+      return;
+    }
+    dispatch(toggleLike({ orchidId: orchid.id, userEmail: user.email }));
+  };
 
   return (
     <motion.div
@@ -54,18 +74,35 @@ export default function OrchidCard({ orchid, onQuickView }) {
             label="Special"
             size="small"
             sx={{
-              position: 'absolute',
-              top: 14,
-              right: 14,
-              zIndex: 10,
-              fontWeight: 700,
-              bgcolor: '#f9a825',
-              color: '#000',
-              boxShadow: '0 2px 8px rgba(249,168,37,0.5)',
-              fontSize: '0.7rem',
+              position: 'absolute', top: 14, left: 14, zIndex: 10,
+              fontWeight: 700, bgcolor: '#f9a825', color: '#000',
+              boxShadow: '0 2px 8px rgba(249,168,37,0.5)', fontSize: '0.7rem',
             }}
           />
         )}
+
+        {/* Like button (top-right) */}
+        <Tooltip title={!user ? 'Login to like' : isLiked ? 'Unlike' : 'Like'} arrow>
+          <IconButton
+            onClick={handleLike}
+            size="small"
+            sx={{
+              position: 'absolute', top: 10, right: 10, zIndex: 10,
+              bgcolor: isDark ? 'rgba(0,0,0,0.55)' : 'rgba(255,255,255,0.85)',
+              backdropFilter: 'blur(6px)',
+              border: isLiked ? '1.5px solid rgba(239,83,80,0.4)' : '1.5px solid transparent',
+              transition: 'all 0.25s ease',
+              '&:hover': {
+                bgcolor: isDark ? 'rgba(0,0,0,0.75)' : 'rgba(255,255,255,1)',
+                transform: 'scale(1.15)',
+              },
+            }}
+          >
+            {isLiked
+              ? <FavoriteIcon sx={{ fontSize: 18, color: '#ef5350' }} />
+              : <FavoriteBorderIcon sx={{ fontSize: 18, color: isDark ? '#90a4ae' : '#607d8b' }} />}
+          </IconButton>
+        </Tooltip>
 
         {/* Image */}
         <Box sx={{ overflow: 'hidden', position: 'relative' }}>
@@ -74,38 +111,27 @@ export default function OrchidCard({ orchid, onQuickView }) {
             height="250"
             image={orchid.image}
             alt={orchid.name}
-            sx={{
-              objectFit: 'cover',
-              transition: 'transform 0.5s cubic-bezier(0.4,0,0.2,1)',
-            }}
+            sx={{ objectFit: 'cover', transition: 'transform 0.5s cubic-bezier(0.4,0,0.2,1)' }}
           />
           {/* Hover overlay */}
           <Box
             className="quick-view-btn"
             onClick={() => onQuickView(orchid)}
             sx={{
-              position: 'absolute',
-              inset: 0,
+              position: 'absolute', inset: 0,
               background: 'linear-gradient(135deg, rgba(13,71,161,0.75), rgba(0,184,212,0.6))',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              opacity: 0,
-              transform: 'translateY(15px)',
-              transition: 'all 0.35s ease',
-              cursor: 'pointer',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              opacity: 0, transform: 'translateY(15px)',
+              transition: 'all 0.35s ease', cursor: 'pointer',
             }}
           >
             <Button
               variant="contained"
               startIcon={<VisibilityIcon />}
               sx={{
-                bgcolor: 'white',
-                color: '#1565c0',
-                fontWeight: 700,
-                borderRadius: '30px',
-                px: 3,
-                '&:hover': { bgcolor: '#e3f2fd', boxShadow: '0 4px 12px rgba(0,0,0,0.2)', transform: 'none' },
+                bgcolor: 'white', color: '#1565c0', fontWeight: 700,
+                borderRadius: '30px', px: 3,
+                '&:hover': { bgcolor: '#e3f2fd', transform: 'none' },
               }}
             >
               Quick View
@@ -122,23 +148,34 @@ export default function OrchidCard({ orchid, onQuickView }) {
               sx={{
                 bgcolor: isDark ? 'rgba(21,101,192,0.25)' : '#e3f2fd',
                 color: isDark ? '#90caf9' : '#1565c0',
-                fontWeight: 700,
-                fontSize: '0.72rem',
+                fontWeight: 700, fontSize: '0.72rem',
               }}
             />
-            <Typography
-              variant="body2"
-              sx={{ display: 'flex', alignItems: 'center', fontWeight: 600, color: 'text.secondary', fontSize: '0.8rem' }}
+
+            {/* Like count with animation */}
+            <Box
+              onClick={handleLike}
+              sx={{
+                display: 'flex', alignItems: 'center', gap: 0.4,
+                cursor: 'pointer',
+                color: isLiked ? '#ef5350' : 'text.secondary',
+                fontWeight: 700, fontSize: '0.85rem',
+                transition: 'color 0.2s, transform 0.2s',
+                '&:hover': { transform: 'scale(1.1)' },
+                userSelect: 'none',
+              }}
             >
-              <FavoriteIcon sx={{ fontSize: 15, color: '#ef5350', mr: 0.4 }} />
-              {orchid.numberOfLike}
-            </Typography>
+              {isLiked
+                ? <FavoriteIcon sx={{ fontSize: 16 }} />
+                : <FavoriteBorderIcon sx={{ fontSize: 16 }} />}
+              <Typography variant="body2" fontWeight={700} color="inherit">
+                {likeCount}
+              </Typography>
+            </Box>
           </Box>
 
           <Typography
-            gutterBottom
-            variant="h6"
-            component="div"
+            gutterBottom variant="h6" component="div"
             sx={{ fontWeight: 800, lineHeight: 1.25, mb: 1, fontSize: '1.05rem' }}
           >
             {orchid.name}
@@ -150,16 +187,11 @@ export default function OrchidCard({ orchid, onQuickView }) {
         {/* Action */}
         <CardActions sx={{ px: 3, pb: 3, pt: 0 }}>
           <Button
-            fullWidth
-            variant="contained"
-            color="primary"
-            component={Link}
-            to={`/detail/${orchid.id}`}
+            fullWidth variant="contained" color="primary"
+            component={Link} to={`/detail/${orchid.id}`}
             startIcon={<InfoIcon />}
             sx={{
-              borderRadius: '14px',
-              py: 1.1,
-              fontWeight: 700,
+              borderRadius: '14px', py: 1.1, fontWeight: 700,
               background: isDark
                 ? 'linear-gradient(90deg,#0d47a1,#1565c0)'
                 : 'linear-gradient(90deg,#1565c0,#1976d2)',
