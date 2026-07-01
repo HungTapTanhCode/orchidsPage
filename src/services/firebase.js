@@ -17,3 +17,6 @@ export const provider = new GoogleAuthProvider();
 
 // ✅ Luôn hiển thị popup chọn tài khoản Google khi login
 provider.setCustomParameters({ prompt: 'select_account' });
+const signInWithgoogle = () => signInWithPopup(auth, provider);
+
+export { signInWithgoogle };  
